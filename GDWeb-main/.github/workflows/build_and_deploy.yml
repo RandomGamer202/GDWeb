@@ -1,0 +1,70 @@
+name: Build and Deploy
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+env:
+  EMSDK_VERSION: 3.1.47
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup cache
+        id: cache-system-libraries
+        uses: actions/cache@v2
+        with:
+          path: emsdk-cache
+          key: ${{env.EMSDK_VERSION}}-${{ runner.os }}
+
+      - name: Setup emscripten
+        uses: mymindstorm/setup-emsdk@v11
+        with:
+          version: ${{env.EMSDK_VERSION}}
+          actions-cache-folder: emsdk-cache
+        
+      - name: Setup Ninja
+        run: sudo apt-get install -y ninja-build
+
+      - name: Configure CMake
+        run: emcmake cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Emscripten
+        run: cmake --build build
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '20'
+      
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm install -D
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v2
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
+        with:
+          path: './frontend/dist'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1
